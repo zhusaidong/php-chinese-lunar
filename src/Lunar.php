@@ -302,14 +302,19 @@ class Lunar
 		
 		$diff_days = $this->dateDiff($solarDate,$lunarDate);
 		
-		$month = $index = 0;
+		$month = $index = $isLeapMonth = 0;
 		while($diff_days >= $lunarDays[$index])
 		{
 			$diff_days -= $lunarDays[$index];
 			$index++;
 			//如果是闰月，实际月份不变
-			if(!($leapMonth > 0 and $leapMonth == $index))
+			if($leapMonth > 0 and $leapMonth == $index)
 			{
+				$isLeapMonth = 1;
+			}
+			else
+			{
+				$isLeapMonth = 0;
 				$month++;
 			}
 		}
@@ -319,7 +324,7 @@ class Lunar
 		{
 			return [$year,$month + 1,$day];
 		}
-		return [$year,$this->toLunarMonth($month + 1),$this->toLunarDay($day)];
+		return [$year,($isLeapMonth ? '闰' : '').$this->toLunarMonth($month + 1),$this->toLunarDay($day)];
 	}
 	/**
 	* 农历日期转阳历日期
@@ -333,7 +338,8 @@ class Lunar
 	*/
 	public function toSolarDate($year,$month,$day)
 	{
-		is_string($month) and $month = $this->toSolarMonth($month);
+		$isLeapMonth = strpos($month,'闰') !== FALSE;
+		is_string($month) and $month = $this->toSolarMonth(str_replace('闰','',$month));
 		is_string($day) and $day = $this->toSolarDay($day);
 		
 		$lunarInfo = $this->getLunarInfo($year);
@@ -343,13 +349,23 @@ class Lunar
 		$lunarDays = $lunarInfo['lunar_month'];
 		$leapMonth = $lunarInfo['leap_month'];
 		
-		if(!($leapMonth > 0 and $leapMonth <= $month))
+		//比如2017年是闰六月，传的数据却是2017年闰九月，说明传的农历月份不正确
+		if($leapMonth != $month and $isLeapMonth)
+		{
+			throw new InvalidArgumentException('农历月份不正确');
+		}
+		
+		if(
+			$leapMonth == 0 or 
+			($leapMonth > 0 and $leapMonth == $month and !$isLeapMonth) or
+			($leapMonth > 0 and $leapMonth > $month)
+		)
 		{
 			$month--;
 		}
 		$_days = array_sum(array_slice($lunarDays,0,$month)) + $day - 1;
 		
-		$time = strtotime($_days.'days',strtotime($lunarDate));
+		$time = strtotime($_days.' days',strtotime($lunarDate));
 		return [intval(date('Y',$time)),intval(date('m',$time)),intval(date('d',$time))];
 	}
 	/**
